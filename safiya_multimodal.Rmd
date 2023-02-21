@@ -1,0 +1,219 @@
+---
+title: "Group Project 1: Multimodal Distribution"
+author: "Safiya Sirota"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(factoextra)
+library(mclust)
+library(NbClust)
+library(tidyverse)
+```
+
+## Creating multimodal data
+
+I have 3 cases of multimodal data. Later for each case, we will run 50-100 simulations using k-means clustering and LCA for datasets of sizes n=500, n=1000, and n=5000. In the first case, the x and y variables come from the same bimodal distribution. In the second case, x and y variables come from two different bimodal distributions. In the third case, x comes from a distribution with 4 modes and y comes from a unimodal, Gaussian distribution.
+
+```{r}
+# Case 1: x and y come from the same bimodal distribution
+generate_df1 <- function(n) {
+    x <- vector("numeric", n)
+    y <- vector("numeric", n)
+    label <- vector("numeric", n)
+    
+    # Defining the distributions
+    for (i in 1:n) {
+    x[i] <- if_else(rbernoulli(1, 0.5) == 1, rnorm(1, -3, 1), rnorm(1, 3, 1))
+    y[i] <- if_else(rbernoulli(1, 0.5) == 1, rnorm(1, -3, 1), rnorm(1, 3, 1))
+    }
+    
+    df <- cbind(x, y)
+    
+    return(df)
+  }
+
+# Case 2: x and y come from different bimodal distributions
+generate_df2 <- function(n) {
+    x <- vector("numeric", n)
+    y <- vector("numeric", n)
+    
+    # Defining the distributions
+    for (i in 1:n) {
+    x[i] <- if_else(rbernoulli(1, 0.5) == 1, rnorm(1, -2, 1), rnorm(1, 2, 1))
+    y[i] <- if_else(rbernoulli(1, 0.5) == 1, rnorm(1, 0, 0.5), rnorm(1, 3, 0.5))
+    }
+  
+    df <- cbind(x, y)
+    
+    return(df)
+  }
+
+# Case 3: x comes from a trimodal distribution and y is from a Gaussian
+generate_df3 <- function(n) {
+    x <- vector("numeric", n)
+    y <- vector("numeric", n)
+    
+    # Defining the distributions
+    for (i in 1:n) {
+    if (rbernoulli(1, 0.5) == 1) {
+      if (rbernoulli(1, 0.5) == 1) {
+        x[i] <- rnorm(1, -5, 0.75)
+      }
+      else {x[i] <- rnorm(1, -2, 0.75)}
+    }
+    else {
+      if (rbernoulli(1, 0.5) == 1) {
+        x[i] <- rnorm(1, 2, 0.75)
+      }
+      else {x[i] <- rnorm(1, 5, 0.75)}
+      }
+    y[i] <- rnorm(1, 0, 1)
+    }
+    
+    df <- cbind(x, y)
+    
+    return(df)
+}
+
+# Visualizations for a Case 1 dataset
+set.seed(222)
+df1 <- generate_df1(500)
+hist(df1[,"x"])
+hist(df1[,"y"])
+plot(df1[,"x"], df1[,"y"])
+
+# Visualizations for a Case 2 dataset
+set.seed(222)
+df2 <- generate_df2(500)
+hist(df2[,"x"])
+hist(df2[,"y"])
+plot(df2[,"x"], df2[,"y"])
+
+# Visualizations for a Case 3 dataset
+set.seed(222)
+df3 <- generate_df3(500)
+hist(df3[,"x"])
+hist(df3[,"y"])
+plot(df3[,"x"], df3[,"y"])
+
+```
+
+## Performing k-means clustering on the data
+
+Here we will use Euclidean distance as a performance metric, i.e., the total within-cluster sum of squares.
+
+```{r}
+# Creating function to perform k-means clustering
+kmeans_fun <- function(FUN, N, n) {
+  
+  # Create vectors to store sum of squares and number of clusters for each run
+  sum_of_squares <- vector("numeric", N)
+  cluster_num <- vector("numeric", N)
+  
+  # Start loop, do k-means clustering for each dataset
+  for (i in 1:N) {
+    
+    # Create data set
+    df <- FUN(n)
+    
+    # Find best number of clusters    
+    res.nbclust <- NbClust(df1, distance = "euclidean",
+                  min.nc = 2, max.nc = 9, 
+                  method = "kmeans", index = "silhouette")
+    
+    cluster_num[i] <- res.nbclust$Best.nc[[1]]
+    
+    # Use k-means to cluster
+    km.res <- kmeans(df, res.nbclust$Best.nc[[1]], nstart = 1)
+    
+    # Store the goodness of fit (within-cluster sum of squares)
+    sum_of_squares[i] <- km.res$tot.withinss
+    }
+  c(mean(sum_of_squares), mean(cluster_num))
+}
+
+## Case 1:
+# 100 runs on data with sample size 500
+kmeans_fun(generate_df1, 100, 500)
+# 100 runs on data with sample size 1000
+kmeans_fun(generate_df1, 100, 1000)
+# 100 runs on data with sample size 5000
+kmeans_fun(generate_df1, 100, 5000)
+
+## Case 2: 
+# 100 runs on data with sample size 500
+kmeans_fun(generate_df2, 100, 500)
+# 100 runs on data with sample size 1000
+kmeans_fun(generate_df2, 100, 1000)
+# 100 runs on data with sample size 5000
+kmeans_fun(generate_df2, 100, 5000)
+
+## Case 3: 
+# 100 runs on data with sample size 500
+kmeans_fun(generate_df3, 100, 500)
+# 100 runs on data with sample size 1000
+kmeans_fun(generate_df3, 100, 1000)
+# 100 runs on data with sample size 5000
+kmeans_fun(generate_df3, 100, 5000)
+```
+
+## Performing LCA on the data
+
+Here we will use BIC as the performance metric.
+
+```{r}
+# Creating function to perform clustering using LCA
+lca_fun <- function(FUN, N, n) {
+  
+  # Create vectors to store sum of squares and number of clusters for each run
+  bic_val <- vector("numeric", N)
+  cluster_num <- vector("numeric", N)
+  
+  # Start loop, do LCA clustering for each dataset
+  for (i in 1:N) {
+    
+    # Create data set
+    df <- FUN(n)
+    
+    # Choose number of clusters using BIC 
+    BIC <- mclustBIC(df)
+  
+    # Estimate clusters using BIC 
+    mod <- Mclust(df1, x = BIC)
+  
+    # Store chosen number of clusters
+     cluster_num[i] <- mod$G
+
+    # Store clustering results (BIC)
+    bic_val[i] <- mod$bic
+  }
+  c(mean(bic_val), mean(cluster_num))
+}
+
+
+## Case 1: 
+# 100 runs on data with sample size 500
+lca_fun(generate_df1, 100, 500)
+# 100 runs on data with sample size 1000
+lca_fun(generate_df1, 100, 1000)
+# 100 runs on data with sample size 5000
+lca_fun(generate_df1, 100, 5000)
+
+## Case 2: 
+# 100 runs on data with sample size 500
+lca_fun(generate_df2, 100, 500)
+# 100 runs on data with sample size 1000
+lca_fun(generate_df2, 100, 1000)
+# 100 runs on data with sample size 5000
+lca_fun(generate_df2, 100, 5000)
+
+## Case 3: 
+# 100 runs on data with sample size 500
+lca_fun(generate_df3, 100, 500)
+# 100 runs on data with sample size 1000
+lca_fun(generate_df3, 100, 1000)
+# 100 runs on data with sample size 5000
+lca_fun(generate_df3, 100, 5000)
+```
+
