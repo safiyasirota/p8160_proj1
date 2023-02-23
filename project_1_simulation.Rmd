@@ -1,0 +1,197 @@
+---
+title: "Group Projects on Monte Carlo Simulation Design."
+date: "P8160 Advanced Statistical Computing "
+output: pdf_document #html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(factoextra)
+library(fossil)
+library(mclust)
+library(tidyverse)
+library(NbClust)
+```
+
+
+\begin{description}
+\item[Project 5] Design a simulation study to compare two clustering methods with non-normal data 
+\end{description}
+
+## Project 5: Design a simulation study to compare two clustering methods with non-normal data 
+
+Clustering is a powerful unsupervised learning approach to discover intrinsic groups in an unstructured data set. Many clustering methods have been proposed in the literature. Among them, k-Means and Latent Class Analysis (LCA) are the two best-known methods applied widely in medical applications.  
+
+K-means is a simple nonparametric approach grouping observations based on their similarities and spatial locations. LCA, on the contrary, is a model-based method that assumes Gaussian Mixture distributions. You can find simple introductions to these two clustering methods and the R packages/functions in what follows.
+
+https://www.datanovia.com/en/lessons/k-means-clustering-in-r-algorith-and-practical-examples/
+
+https://cran.r-project.org/web/packages/mclust/vignettes/mclust.html#clustering
+
+
+\paragraph{Your tasks:} Both methods are proven successful and well-tested when the normally or elliptically distributed data. In real world applications, data often exhibit non-normal features, including asymmetry/skewed, multimodality, heavy-tails, and the presence of outliers. How well and how robust they perform for non-elliptical distributions are less understood and investigated. Design a simulation study to comprehensively assess and compare the performance of K-means and LCA when the data are non-normal. (You may stay with bivariate cases.)
+
+
+
+We consider bivariate cases with two latent clusters for all our simulation settings.
+
+We consider the mixture models with two mixing component with equal mixing weights:
+$f(x) = \sum_{k=1}^2 \lambda_kf_k(x)$, $\lambda_k = 0.5$ is the mixing weights. We also denote the clusters belonging to $\lambda_k, k = 1,2$ as clusters $A,B$ respectively. We restrict our attention to the parametric mixture models. 
+
+In all our simulation settings, we will simulate $x_1$ from a mixture models and $x_2$ from an independent Gaussian distribution. 
+
+
+### heavy-tailed distribution: Cauchy distribtution
+
+To evaluate the setting with heavy-tailed distribution, we sample $X_{1i}$ from a mixture of Cauchy distribution and $X_{2i}$ from a standard normal distribution.
+
+```{r}
+## function to generate data from mixture of Cauchy distribution  
+
+generate_cauchy_df <- function(n) {
+  
+  x1 <-  c(rcauchy(n/2, -3,3), rcauchy(n/2,3,0.5))
+  x2 <-  rnorm(n)
+  df <- cbind(x1,x2)
+  
+  ## Scale the data
+  df_scaled <- as.data.frame(scale(df))
+  
+  ## True class label 
+  class <- factor(rep(1:2, each = n/2))
+  
+  df_scaled <- cbind(df_scaled,class) 
+  
+  return(df_scaled)
+}
+
+
+## function to perform clustering using K means
+
+kmeans_fun <- function(FUN, N, n) {
+  
+  # Create vectors to store rand index 
+  rand_index <- vector("numeric", N)
+  cluster_num <- vector("numeric", N)
+  
+  # Start loop, do k-means clustering for each dataset
+  for (i in 1:N) {
+    
+    set.seed(i)
+    
+    # Create data set
+    df <- FUN(n)
+    
+    # Find best number of clusters    
+    res.nbclust <- NbClust(df[,1:2], distance = "euclidean",
+                  min.nc = 2, max.nc = 9, 
+                  method = "kmeans", index = "silhouette")
+    
+    cluster_num[i] <- res.nbclust$Best.nc[[1]]
+    
+    # Use k-means to cluster
+    km.res <- kmeans(df[,1:2], res.nbclust$Best.nc[[1]], nstart = 25, algorithm="MacQueen")
+    
+    # Compute the rand index
+    rand_index[i] <- rand.index(as.numeric(df$class), km.res$cluster)
+  }
+  
+  return(rand_index)
+}
+
+
+lca_fun <- function(FUN, N, n) {
+  
+  # Create vectors to store rand index 
+  rand_index <- vector("numeric", N)
+  cluster_num <- vector("numeric", N)
+  
+  # Start loop, do lca clustering for each dataset
+  for (i in 1:N) {
+    
+    set.seed(i)
+    
+    # Create data set
+    df <- FUN(n)
+    
+    # Choose number of components using BIC 
+    BIC <- mclustBIC(df[,1:2])
+    
+    # Estimate clusters using BIC 
+    mod1 <- Mclust(df[,1:2], x = BIC)
+    
+    # Compute the rand index
+    
+    rand_index[i] <- rand.index(as.numeric(df$class), mod1$classification)
+  }
+  
+  return(rand_index)
+}
+
+
+### 100 runs of simulation with sample size of 500
+
+rand_kmeans_500_cauchy <- kmeans_fun(generate_cauchy_df, 100, 500)
+saveRDS(rand_kmeans_500_cauchy,"rand_kmeans_500_cauchy.RDS")
+rand_kmeans_1000_cauchy <- kmeans_fun(generate_cauchy_df, 100, 1000)
+saveRDS(rand_kmeans_1000_cauchy,"rand_kmeans_1000_cauchy.RDS")
+rand_kmeans_5000_cauchy <- kmeans_fun(generate_cauchy_df, 100, 5000)
+saveRDS(rand_kmeans_5000_cauchy,"rand_kmeans_5000_cauchy.RDS")
+rand_lca_500_cauchy <- lca_fun(generate_cauchy_df, 100, 500)
+saveRDS(rand_lca_500_cauchy,"rand_lca_500_cauchy.RDS")
+rand_lca_1000_cauchy <- lca_fun(generate_cauchy_df, 100, 1000)
+saveRDS(rand_lca_1000_cauchy,"rand_lca_1000_cauchy.RDS")
+rand_lca_5000_cauchy <- lca_fun(generate_cauchy_df, 100, 5000)
+saveRDS(rand_lca_5000_cauchy,"rand_lca_5000_cauchy.RDS")
+```
+
+
+### Outliers 
+
+We generate outliers from Gaussian distribution with mean and standard deviation of $30, -30$ and $1$.
+
+```{r}
+
+generate_outlier_df <- function(n) {
+  
+  x1 <-  c(rnorm(n/4,0,1) + rbinom(n/4,1,0.05)*rnorm(n/4, 30, 1), 
+           rnorm(n/4,0,1) + rbinom(n/4,1,0.05)*rnorm(n/4, -30, 1), 
+           rnorm(n/4,3,1) + rbinom(n/4,1,0.05)*rnorm(n/4, 30, 1), 
+           rnorm(n/4,3,1) + rbinom(n/4,1,0.05)*rnorm(n/4, -30, 1))
+  x2 <-  rnorm(n)
+  df <- cbind(x1,x2)
+  
+  ## Scale the data
+  df_scaled <- as.data.frame(scale(df))
+  
+  ## True class label 
+  class <- factor(rep(1:2, each = n/2))
+  
+  df_scaled <- cbind(df_scaled,class) 
+  
+  return(df_scaled)
+}
+
+
+### 100 runs of simulation with sample size of 500
+
+rand_kmeans_500_outlier <- kmeans_fun(generate_outlier_df, 100, 500)
+rand_kmeans_1000_outlier <- kmeans_fun(generate_outlier_df, 100, 1000)
+rand_kmeans_5000_outlier <- kmeans_fun(generate_outlier_df, 100, 5000)
+rand_lca_500_outlier <- lca_fun(generate_outlier_df, 100, 500)
+rand_lca_1000_outlier <- lca_fun(generate_outlier_df, 100, 1000)
+rand_lca_5000_outlier <- lca_fun(generate_outlier_df, 100, 5000)
+saveRDS(rand_kmeans_500_outlier,"rand_kmeans_500_outlier.RDS")
+saveRDS(rand_kmeans_1000_outlier, "rand_kmeans_1000_outlier.RDS")
+saveRDS(rand_kmeans_5000_outlier, "rand_kmeans_5000_outlier.RDS")
+saveRDS(rand_lca_500_outlier, "rand_lca_500_outlier.RDS")
+saveRDS(rand_lca_1000_outlier, "rand_lca_1000_outlier.RDS")
+saveRDS(rand_lca_5000_outlier, "rand_lca_5000_outlier.RDS")
+```
+
+```{r}
+t <- readRDS("rand_lca_1000_outlier.RDS")
+```
+
+
