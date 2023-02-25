@@ -1,0 +1,433 @@
+---
+title: "Project1_skewed_data"
+output: html_document
+date: "2023-02-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,message = FALSE}
+library(psych)
+library(tibble)
+library(tidyverse)
+library(ggplot2)
+library(caret)
+library(plotly)
+library(factoextra)
+library(NbClust)
+library(mclust)
+library(fossil)
+library(purrr)
+```
+
+
+## Create data for simulation
+
+We have 2 features: x and y. Each follows a weibull distribution. They are the predictors for 2 classes: a and b. 
+
+We generated 100 simulations for each sample sizes. So there are 3 * 100 = 300 data sets in total. 
+
+```{r,message = FALSE}
+sample_sizes <- c(500, 1000, 5000)
+
+num_simulations <- 100
+
+set.seed(2023)
+
+# one sample of simulated data
+one_sim_data <- function(sample_size) {
+  group_a_x <- rweibull(n=sample_size/2, shape = 1, scale = 5)
+  group_a_y <- rweibull(n=sample_size/2, shape = 1, scale = 3)
+
+  group_b_x <- rweibull(n=sample_size/2, shape = 12, scale = 14)
+  group_b_y <- rweibull(n=sample_size/2, shape = 1, scale = 4)
+
+  # each of them could be a type of wind/ waterfall etc
+  df_a <- tibble(x = group_a_x, y = group_a_y, group = 1)
+  df_b <- tibble(x = group_b_x, y =group_b_y, group = 2)
+
+  df = rbind(df_a, df_b) %>%
+  mutate(group = factor(group))
+
+  return (df)
+}
+
+
+# for each sample size, create 100 samples
+all_sim_data <- purrr::map2_dfr(sample_sizes, num_simulations, 
+                         .f = function(sample_sizes, num_simulations) {
+                           data_one_size <- 
+                             expand.grid(
+                               sample_sizes=sample_sizes, 
+                               itr = 1:num_simulations) %>%
+                             dplyr::mutate(sample = purrr::map(sample_sizes, one_sim_data))
+                         })
+
+```
+
+## Example sample data
+```{r,warning = FALSE}
+sample_example <- unnest(all_sim_data$sample[[230]])
+sample_example_a <- sample_example  %>% filter(group ==1)
+sample_example_b <- sample_example %>% filter(group ==2) 
+```
+
+```{r}
+# https://stackoverflow.com/questions/8545035/scatterplot-with-marginal-histograms-in-ggplot2
+library(ggpubr)
+# Scatter plot colored by groups ("Species")
+sp <- ggscatter(sample_example, x = "x", y = "y",
+            color = "group", palette = c("#F8766D", "#00BFC4"),
+            size = 1, alpha = 0.1) + 
+  border()                                         
+# Marginal density plot of x (top panel) and y (right panel)
+xplot <- ggdensity(sample_example, "x", fill = "group",
+               palette = c("#F8766D", "#00BFC4"))
+yplot <- ggdensity(sample_example, "y", fill = "group", 
+               palette = c("#F8766D", "#00BFC4"))+
+rotate()
+# Cleaning the plots
+sp <- sp + rremove("legend")
+yplot <- yplot + clean_theme() + rremove("legend") 
+xplot <- xplot + clean_theme() 
+# Arranging the plot using cowplot
+library(cowplot)
+plot_grid(xplot, NULL, sp, yplot, ncol = 2, align = "hv", 
+      rel_widths = c(2, 1), rel_heights = c(1, 2))
+```
+
+```{r,message = FALSE}
+scatter.hist(x=sample_example_a$x, y = sample_example_a$y, density=TRUE, ellipse=TRUE)
+```
+
+```{r,message = FALSE}
+scatter.hist(x=sample_example_b$x, y = sample_example_b$y, density=TRUE, ellipse=TRUE)
+```
+
+```{r,message = FALSE}
+sample_example %>%
+  ggplot() +
+  geom_point(aes(x = x, y=y, colour = group), alpha = 0.1) +
+  theme_bw()
+```
+
+```{r}
+kd <- with(MASS::geyser, MASS::kde2d(sample_example_b$x, sample_example_b$y, n = 50))
+fig <- plot_ly(x = kd$x, y = kd$y, z = kd$z) %>% add_surface(opacity = 0.5)
+fig
+```
+
+
+
+## Prepare for simulations...
+```{r}
+# empty vector to collect results
+sim_results <- expand.grid(sample_sizes=sample_sizes, itr = 1:num_simulations) %>%
+  arrange(sample_sizes)
+```
+
+## K Means
+
+```{r,warning = FALSE}
+kmeans_optimal_cluster_num <- vector("list", length(sample_sizes)*num_simulations)
+kmeans_rand_index <- vector("list", length(sample_sizes)*num_simulations)
+
+for (i in 1:nrow(all_sim_data)){ 
+  
+  sample<- unnest(all_sim_data$sample[[i]])
+  
+  data <- sample %>% select(-group)
+  
+  # scale data
+  data <- scale(data)
+
+  
+  # Find best number of clusters    
+  res.nbclust <- NbClust(data, distance = "euclidean",
+                 min.nc = 2, max.nc = 9, 
+                 method = "kmeans", index = "silhouette")
+  
+  optimal_cluster_num <- res.nbclust$Best.nc[[1]]
+  
+  # Use k-means to cluster
+  set.seed(2023)
+  km <- kmeans(x = data, centers = optimal_cluster_num, nstart = 25)
+
+  rand_index <- rand.index(as.numeric(sample$group), km$cluster)
+  
+  
+  kmeans_optimal_cluster_num[[i]] <- optimal_cluster_num
+  
+  kmeans_rand_index[[i]] <- rand_index
+}
+
+```
+
+```{r}
+sim_results <- sim_results %>% mutate(kmeans_optimal_cluster_num = unlist(kmeans_optimal_cluster_num),
+                                      kmeans_rand_index = unlist(kmeans_rand_index))
+```
+
+```{r}
+sim_results %>%
+  select(-itr) %>%
+  ggplot(aes(x = as.factor(sample_sizes), y = kmeans_rand_index)) +
+  geom_boxplot() +
+  labs(x = "Sample Sizes", y = "K Means Rand Index")
+```
+```{r}
+sim_results %>%
+  select(-itr) %>%
+  ggplot(aes(x = kmeans_optimal_cluster_num)) +
+  geom_histogram() +
+  facet_grid(.~as.factor(sample_sizes))
+```
+## LCA
+
+```{r,warning=FALSE}
+lca_optimal_cluster_num <- vector("list", length(sample_sizes)*num_simulations)
+lca_rand_index <- vector("list", length(sample_sizes)*num_simulations)
+lca_bic <- vector("list", length(sample_sizes)*num_simulations)
+
+for (i in 1:nrow(all_sim_data)){ 
+  sample<- unnest(all_sim_data$sample[[i]])
+  
+  data <- sample %>% select(-group)
+  
+  set.seed(2023)
+  
+  BIC <- mclustBIC(data)
+  
+  lca <- Mclust(data, x = BIC)
+  
+  # Store chosen number of clusters
+  lca_optimal_cluster_num[[i]] <- lca$G
+
+  lca_rand_index[[i]] <- rand.index(as.numeric(sample$group),lca$classification)
+  
+  lca_bic[[i]] <- BIC
+}
+
+```
+
+
+```{r}
+sim_results <- sim_results %>% mutate(lca_optimal_cluster_num = unlist(lca_optimal_cluster_num),
+                                      lca_rand_index = unlist(lca_rand_index))
+```
+
+```{r}
+sim_results %>%
+  select(-itr) %>%
+  ggplot(aes(x = as.factor(sample_sizes), y = lca_optimal_cluster_num)) +
+  geom_boxplot()
+```
+
+```{r}
+sim_results %>%
+  select(-itr) %>%
+  ggplot(aes(x = as.factor(sample_sizes), y = lca_rand_index)) +
+  geom_boxplot()
+```
+## Final results
+```{r}
+sim_results %>%
+  select(-itr) %>%
+  pivot_longer(cols = contains("optimal_cluster_num"),
+               names_to = "method",
+               values_to = "optimal_cluster_num"
+               ) %>%
+  ggplot(aes(x = as.factor(sample_sizes), y = optimal_cluster_num)) +
+  geom_boxplot() +
+  facet_grid(.~method, scales="free")+
+  labs(x = "sample size", y = "optimal number of clusters")
+```
+```{r}
+sim_results %>%
+  select(-itr) %>%
+   pivot_longer(cols = contains("rand_index"),
+               names_to = "method",
+               values_to = "rand_index"
+               )  %>%
+  ggplot(aes(x = as.factor(sample_sizes), y = rand_index)) +
+  geom_boxplot() +
+  facet_grid(.~method, scales="free")+
+  labs(x = "sample size", y = "rand index")
+
+```
+
+K means decide to have much fewer number of clusters than LCA. Due to the nature of the data set, a smaller optimal number of clusers does have advantage. 
+
+K means has higher rand index across all sample size than LCA. As sample size grows, rand index IQR becomes narrower.
+
+
+## Case Study
+
+### K means with the highest rand index
+
+```{r}
+sim_results %>%
+  arrange(desc(kmeans_rand_index)) %>%
+  slice(1)
+```
+
+```{r}
+kmeans_hi_rand_df <- all_sim_data %>%
+  filter(sample_sizes == 500 & itr == 81) %>%
+  select(sample) %>%
+  unnest()
+```
+
+```{r}
+kmeans_hi_rand_df %>%
+  ggplot() +
+  geom_point(aes(x = x, y=y, colour = group), alpha = 0.1)
+```
+
+```{r}
+set.seed(2023)
+kmeans_hi_rand_fit <- kmeans(x = kmeans_hi_rand_df %>% select(-group) %>% scale(), centers = 3, nstart = 25)
+
+```
+
+```{r}
+fviz_cluster(kmeans_hi_rand_fit, kmeans_hi_rand_df %>% select(-group)) 
+
+```
+Although it has the highest rand index, the way that it made the clusters does not make too much sense. The green cluster cut across the true group 2. 
+
+
+#### LCA performance on this dataset
+```{r}
+set.seed(2023)
+BIC <- lca_bic[[81]]
+
+plot(BIC)
+
+lca__fit <- Mclust(kmeans_hi_rand_df %>% select(-group), x = BIC)
+
+```
+```{r}
+plot(lca__fit, what = "classification")
+```
+
+
+
+### LCA with the highest rand index
+```{r}
+sim_results %>%
+  arrange(desc(lca_rand_index)) %>%
+  slice(1)
+```
+```{r}
+lca_hi_rand_df <- all_sim_data %>%
+  filter(sample_sizes == 500 & itr == 74) %>%
+  select(sample) %>%
+  unnest()
+```
+
+```{r}
+lca_hi_rand_df %>%
+  ggplot() +
+  geom_point(aes(x = x, y=y, colour = group), alpha = 0.1)
+```
+
+```{r}
+set.seed(2023)
+### Choose number of components using BIC 
+BIC <- lca_bic[[74]]
+
+plot(BIC)
+
+### Estimate clusters using BIC 
+lca_hi_rand_fit <- Mclust(lca_hi_rand_df %>% select(-group), x = BIC)
+```
+```{r}
+plot(lca_hi_rand_fit, what = "classification")
+
+```
+```{r}
+plot(lca_hi_rand_fit, what = "uncertainty")
+
+```
+
+#### K means performance on this data set
+```{r}
+set.seed(2023)
+kmeans_fit <- kmeans(x = lca_hi_rand_df %>% select(-group) %>% scale(), centers = 3, nstart = 25)
+```
+
+```{r}
+fviz_cluster(kmeans_fit, lca_hi_rand_df %>% select(-group)) 
+```
+
+
+### 5000 sample size
+
+```{r}
+sim_results %>% filter(sample_sizes == 5000 & itr == 1)
+```
+
+```{r}
+large_sample_df <- all_sim_data %>%
+  filter(sample_sizes == 5000 & itr == 1) %>%
+  select(sample) %>%
+  unnest()
+```
+
+```{r}
+large_sample_df %>%
+  ggplot() +
+  geom_point(aes(x = x, y=y, colour = group), alpha = 0.1)
+```
+
+```{r}
+set.seed(2023)
+large_sample_kmeans_fit <- kmeans(x = large_sample_df %>% select(-group) %>% scale(), centers = 3, nstart = 25)
+
+```
+
+```{r}
+fviz_cluster(large_sample_kmeans_fit, large_sample_df %>% select(-group)) 
+
+```
+
+
+```{r}
+large_sample_kmeans_results <- large_sample_kmeans_fit$cluster
+```
+
+```{r}
+backgroud <- large_sample_df %>%
+  mutate(results = large_sample_kmeans_results)
+
+
+ggplot()+
+  geom_point(data = backgroud, mapping = aes(x =x, y=y,color = as.factor(results)), alpha = 0.1)+
+  #geom_point(data = large_sample_df,mapping = aes(x =x, y=y,color = as.factor(group)), alpha = 0.1 )+
+  scale_color_discrete("Default") +
+  labs(title = "K Means Performance")
+  
+  
+```
+straight edges 
+
+```{r}
+set.seed(2023)
+### Choose number of components using BIC 
+BIC <- lca_bic[[201]]
+
+plot(BIC)
+
+### Estimate clusters using BIC 
+large_sample_rand_fit <- Mclust(large_sample_df %>% select(-group), x = BIC)
+```
+
+```{r}
+### Visualize results 
+plot(large_sample_rand_fit, what = "classification", main = "LCA Performance")
+```
+
+LCA has more clusters. Shape of its clusters are elliptical. kmeans shape is more irregular 
