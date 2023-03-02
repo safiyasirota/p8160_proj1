@@ -123,11 +123,59 @@ performance with Rand Index in each settings with varying sample sizes.
 \hypertarget{k-means}{%
 \subsection{K Means}\label{k-means}}
 
+K-means clustering is a popular clustering algorithm that partitions
+data into a prespecified number of clusters. The goal of k-means is to
+find clusters such that the total within-cluster variation is minimized.
+
+\[add\ equation\] There are four steps to the k-means algorithm. (1)
+Specify number of clusters \(k\). (2) Assign each observation to their
+closest centroid, minimizing \(W(C_k)\). (3) For each cluster, update
+the cluster centroid by calculating the new mean values of all the data
+points in the cluster. The centroid of a \(K_{th}\) cluster is a vector
+of length \(p\) containing the means of all variables. (4) Iteratively
+minimize the total within sum of square. That is, iterate steps 3 and 4
+until the cluster assignments stop changing or the maximum number of
+iterations is reached.
+
+There are multiple ways to determine the optimal number of clusters for
+k-means. In this project, we use the average silhouette method. This
+method chooses the optimal number of clusters \(k\) that maximized the
+average silhouette.
+
 \hypertarget{latent-class-analysis}{%
 \subsection{Latent Class Analysis}\label{latent-class-analysis}}
 
+LCA is a model-based clustering approach that derives clusters using a
+Gaussian finite mixture modeling that describes distribution the data.
+We use the R package \(\textbf{mclust}\) for this task which allows a
+wide range of parameterizations of the data.
+
+LCA uses finite mixture modeling for parameter estimation, which is
+crucial to determining the number of components.
+
 \hypertarget{performance-metric}{%
 \section{Performance Metric}\label{performance-metric}}
+
+We use the Rand index as our performance metric in this study. It is
+used to compare the similarity of results between two different
+clustering methods. In our case, we compare our k-means or LCA
+clustering results to the true clustering that we have defined through
+our data generation.
+
+Given a set of \(n\) elements \(S = \{o_1, \dots, o_n\}\) and two
+partitions of S to compare, \(X = \{X_1, \dots, X_r\}\), and
+\(Y = \{Y_1, \dots, Y_s\}\) we denote \(a\) as the number of times a
+pair of elements belongs to the same cluster across two clustering
+methods. And we denote \(b\) as the number of times a pair of elements
+belong to different clusters across the two methods. Finally, the Rand
+index is
+
+\begin{equation*}
+R = \frac{a+b}{{2 \choose n}},
+\end{equation*}
+
+which measures the proportion of agreement of two clustering methods in
+all unordered pairs.
 
 \hypertarget{simulations-settings-and-results}{%
 \section{Simulations Settings and
@@ -196,14 +244,100 @@ K-means choose its optimal number of cluster around 3 which is much
 lower than that of LCA across all sample sizes. As sample size
 increases, the optimal number of cluster increases for LCA as well.
 
+\includegraphics[width=4.16667in,height=\textheight]{report_image/skewed_data_num_clusters_results.png}
+\newpage
+
+\hypertarget{multimodal-data---data-generation}{%
+\subsection{Multimodal Data - Data
+Generation}\label{multimodal-data---data-generation}}
+
+In this setting, we have two independent variables \(X\) and \(Y\),
+which both follow the same bimodal mixture distribution. Variables \(X\)
+and \(Y\) can each be partitioned into two parts, \(\{X_1, X_2\}\) and
+\(\{Y_1, Y_2\}\), where \(X_1\), \(Y_1\) are drawn from one bimodal
+distribution and \(X_2\), \(Y_2\) are drawn from a different bimodal
+distribution, as specified below.
+
+\begin{align*}
+  X_1, Y_1 & \sim 
+  \begin{cases}
+    N(-3, \frac{3}{4}) & w/\ prob.\ 0.5 \\
+    N(0, \frac{3}{4}) & w/\ prob.\ 0.5
+  \end{cases} \\
+  X_2, Y_2 & \sim
+  \begin{cases}
+    N(3, \frac{3}{4}) & w/\ prob.\ 0.5 \\
+    N(6, \frac{3}{4}) & w/\ prob.\ 0.5
+  \end{cases}
+\end{align*}
+
+Since each bimodal distribution is a mixture of two Gaussian
+distributions, these data follow a Gaussian mixture distribution,
+leading to four distinct latent clusters. This can be seen in the figure
+below, which graphs an example dataset on X and Y axes and colors the
+data points by cluster.
+
 \begin{figure}
 \centering
-\includegraphics[width=4.16667in,height=\textheight]{report_image/skewed_data_num_clusters_results.png}
-\caption{Skewed Data Comparison - Optimal Number of Clusters}
+\includegraphics{report_image/multimodal_clusters.png}
+\caption{Mutlimodal Data - Latent Clusters}
 \end{figure}
 
-\hypertarget{conclusion-and-discussion}{%
-\section{Conclusion and Discussion}\label{conclusion-and-discussion}}
+Since this is a mixture Gaussian case, we should expect LCA to perform
+very well since it assumes mixture Gaussian data. K-mean should also
+perform well, since k-means is proven to identify cluster in normal data
+well.
+
+\hypertarget{multimodal-data---results}{%
+\subsection{Multimodal Data - Results}\label{multimodal-data---results}}
+
+We found that the median Rand index for 100 runs using k-means with
+sample size \(n=500\) was 0.99 (IQR: 0.17) while for LCA it was 1 (IQR:
+0). For sample size was \(n=1000\) the median Rand index for k-means was
+0.99 (IQR: 0.25) and for LCA it was 1 (IQR: 0). For sample size
+\(n=5000\) the median Rand index for k-means was 1 (IQR: 0) and it was
+the same for LCA. These results are visualized below and show that
+k-means and LCA both perform almost perfectly in this case, with LCA
+performing better when the sample size is smaller. Variation from a Rand
+index of 1 (i.e., perfect classification) comes in only when k-means or
+LCA algorithms do not choose the correct number of clusters initially.
+
+\begin{figure}
+\centering
+\includegraphics{report_image/multimodal_results.png}
+\caption{Mutlimodal Data - Results}
+\end{figure}
+
+\hypertarget{discussion}{%
+\section{Discussion}\label{discussion}}
+
+\hypertarget{conclusion}{%
+\subsection{Conclusion}\label{conclusion}}
+
+In conclusion, we found that for skewed data, k-means performs better
+than LCA. However, in all other cases, LCA outperformed k-means, except
+in the case where the data follows a Gaussian mixture distribution and
+the sample size of the dataset is very large, in which case k-means and
+LCA perform similarly.
+
+\hypertarget{limitations}{%
+\subsection{Limitations}\label{limitations}}
+
+In this study, we found that there is no uniformly best algorithm for
+identifying latent clusters in data. This leads us to believe that
+knowing how the data is generated is important for deciding whether to
+use k-means or LCA. However, this information is rarely known.
+
+We also found that variation in correct classification for both
+algorithms often comes from choosing the number of clusters. There are
+many ways to choose the number of clusters before actually performing
+the clustering algorithm. Varying these methods goes beyond the scope of
+this study, but future research should test k-means against LCA under
+different cluster number selection techniques.
+
+In summation, we suggest that researchers make informed speculations
+about the shape and potential number of latent clusters in their data
+before running either k-means or LCA in order to get the best results.
 
 \hypertarget{references}{%
 \section{References}\label{references}}

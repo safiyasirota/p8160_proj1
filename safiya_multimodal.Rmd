@@ -229,3 +229,51 @@ full_df %>%
   geom_boxplot(aes(x = as_factor(sample), y = rand_clust, fill = algorithm)) +
   labs(x = "sample size", y = "Rand index")
 ```
+
+## Getting Values of Results
+
+```{r}
+km500 <- full_df %>% 
+  filter(alg == "k_means" & sample == 500) %>% 
+  pull(rand_clust)
+
+median(km500)
+IQR(km500)
+
+km1000 <- full_df %>% 
+  filter(alg == "k_means" & sample == 1000) %>% 
+  pull(rand_clust)
+
+median(km1000)
+IQR(km1000)
+
+km5000 <- full_df %>% 
+  filter(alg == "k_means" & sample == 5000) %>% 
+  pull(rand_clust)
+
+median(km5000)
+IQR(km5000)
+
+lca500 <- full_df %>% 
+  filter(alg == "lca" & sample == 500) %>% 
+  pull(rand_clust)
+
+median(lca500)
+IQR(lca500)
+
+lca1000 <- full_df %>% 
+  filter(alg == "lca" & sample == 1000) %>% 
+  pull(rand_clust)
+
+median(lca1000)
+IQR(lca1000)
+
+lca5000 <- full_df %>% 
+  filter(alg == "lca" & sample == 5000) %>% 
+  pull(rand_clust)
+
+median(lca5000)
+IQR(lca5000)
+  
+```
+
