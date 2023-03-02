@@ -62,7 +62,7 @@ To investigate some potential reasons behind this, we compare the optimal number
 
 In this figure, we compare the optimal number of clusters. Overall, K-means choose its optimal number of cluster around 3 which is much lower than that of LCA across all sample sizes. As sample size increases, the optimal number of cluster increases for LCA as well. 
 
-![Skewed Data Comparison - Number of Optimal Clusters](report_image/skewed_data_num_clusters_results.png){width=400px}
+![Skewed Data Comparison - Optimal Number of Clusters](report_image/skewed_data_num_clusters_results.png){width=400px}
 
 # Conclusion and Discussion
 
