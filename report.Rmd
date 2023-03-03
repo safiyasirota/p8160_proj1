@@ -14,7 +14,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE, fig.align="center", fig.width = 7)
 ```
 
 # Background and Objective
@@ -27,18 +27,29 @@ In our project, we focus on the unsupervised learning scenario and we investigat
 
 ## K Means
 
-K-means clustering is a popular clustering algorithm that partitions data into a prespecified number of clusters. The goal of k-means is to find clusters such that the total within-cluster variation is minimized.
+K-means clustering is a popular clustering algorithm that partitions data into a prespecified number of clusters. The goal for k-means is to find clusters such that the total within-cluster variation is minimized.
+Formally, the within-cluster variation is defined as follows: 
 
-$$add\ equation$$
-There are four steps to the k-means algorithm. (1) Specify number of clusters $k$. (2) Assign each observation to their closest centroid, minimizing $W(C_k)$. (3) For each cluster, update the cluster centroid by calculating the new mean values of all the data points in the cluster. The centroid of a $K_{th}$ cluster is a vector of length $p$ containing the means of all variables. (4) Iteratively minimize the total within sum of square. That is, iterate steps 3 and 4 until the cluster assignments stop changing or the maximum number of iterations is reached.
+$$tot.withinss = \sum_{i=1}^kW(C_k) = \sum_{i=1}^k\sum_{x\in c_k}(x_i-\mu_k)^2$$
 
-There are multiple ways to determine the optimal number of clusters for k-means. In this project, we use the average silhouette method. This method chooses the optimal number of clusters $k$ that maximized the average silhouette.
+A general procedure of the k-means algorithm can be described as follows:  
+(1) Specify number of clusters $k$.  
+(2) Assign each observation to their closest centroid, minimizing $W(C_k)$.  
+(3) For each cluster, update the cluster centroid by calculating the new mean values of all the data points in the cluster. The centroid of a $K_{th}$ cluster is a vector of length $p$ containing the means of all variables.   
+(4) Iteratively minimize the total within sum of square. That is, iterate steps 3 and 4 until the cluster assignments stop changing or the maximum number of iterations is reached.  
+
+Specifying the number of clusters is a crucial step for the K means algorithms. There are multiple ways to determine the optimal number of clusters for k-means. In this project, we use the average silhouette method, which provides a measure of the similarity of an object is to its own cluster compared to other clusters. This method chooses the optimal number of clusters $k$ that maximized the average silhouette.
 
 ## Latent Class Analysis
 
-LCA is a model-based clustering approach that derives clusters using a Gaussian finite mixture modeling that describes distribution the data. We use the R package $\textbf{mclust}$ for this task which allows a wide range of parameterizations of the data.
+In contrast to K means algorithm which uses a distance based criteria, LCA is a model-based clustering approach that derives clusters using a Gaussian finite mixture modeling that describes distribution the data. We use the R package $\textbf{mclust}$ for this task which allows a wide range of parameterizations of the data as shown in figure 1[@scrucca2016mclust]. 
 
-LCA uses finite mixture modeling for parameter estimation, which is crucial to determining the number of components.
+![Parameterisations of the within-group covariance matrix for multidimensional data available in the mclust package, and the corresponding geometric characteristics.](report_image/mclust_table){width=400px}
+
+LCA uses finite mixture modeling for parameter estimation, which is crucial to determining the number of components. A variety of approaches can be used to estimate the component number and in this project, we utilize the Bayesian Information Criterion (BIC) for this task. BIC is one of the popular choice for model selection in the context of Gaussian Mixture Modeling. It takes on a penalized forms of the log-likelihood where a penalty term for the number of estimated parameters is subtracted from the log-likelihood. Formally, 
+$$BIC_{M,G} = 2l_{M,g}(X|\hat{\Psi}) - v\text{log}(n)$$
+ where $l_{M,g}(X|\hat{\Psi})$ is the log-likelihood at the MLE $\hat{\Psi}$ for model $M$ with $G$ components, $n$ is the sample size, and $v$ is the number of estimated parameters The pair ${M, G}$ which maximizes $BIC_{M,G}$ is selected as the final model.  
+
 
 # Performance Metric
 
@@ -59,7 +70,9 @@ In simulations, we consider bivariate data with 2 true clusters. We generated da
 For each simulation setting, we create 100 runs using randomly generated data sets in size of 500, 1000, 5000 and evaluate the Rand index for each method.
 
 
-## Skewed Data - Data Generation
+## Skewed Data 
+
+### Data Generation
 
 In this setting, we want to test the performance of K-means and LCA when all features follow a skewed distribution. We assume the features $X_1, X_2$ are independent.
 
@@ -71,20 +84,27 @@ We generate 2 equal-sized clusters with total size being 500, 1000 and 5000. An 
 
 ![Skewed Data Sample](report_image/skewed_sample.png){width=400px}
 
-## Skewed Data - Results
+### Results
 
 We are interested in how well K-means and LCA perform when the input data already has two true clusters. We calculate Rand Index for sample data in each simulation run and conclude that after 100 simulations, K-means performs better than LCA across all sample sizes. As sample size increases, the variance of Rand Index decreases. 
 
+
 ![Skewed Data Comparison - Rand Index](report_image/skewed_data_rand_index_results.png){width=400px}
+
+
 
 To investigate some potential reasons behind this, we compare the optimal number of cluster number for each method in all simulations. Choosing the optimal cluster number is the first step for both methods. This number is crucial to our comparison because we predetermined the number of true clusters to be 2 and Rand Index uses the number of agreements in its calculation. Therefore, having a cluster number that is larger than 2 could hurt the performance. 
 
 In this figure, we compare the optimal number of clusters. Overall, K-means choose its optimal number of cluster around 3 which is much lower than that of LCA across all sample sizes. As sample size increases, the optimal number of cluster increases for LCA as well. 
 
-![Skewed Data Comparison - Optimal Number of Clusters](report_image/skewed_data_num_clusters_results.png){width=400px}
-\newpage
+```{r, fig.cap="Skewed Data Comparison - Optimal Number of Clusters", out.width = "50%"}
+knitr::include_graphics("report_image/skewed_data_num_clusters_results.png")
+```
 
-## Multimodal Data - Data Generation
+
+## Multimodal Data 
+
+### Data Generation
 
 In this setting, we have two independent variables $X$ and $Y$, which both follow the same bimodal mixture distribution. Variables $X$ and $Y$ can each be partitioned into two parts, $\{X_1, X_2\}$ and $\{Y_1, Y_2\}$, where $X_1$, $Y_1$ are drawn from one bimodal distribution and $X_2$, $Y_2$ are drawn from a different bimodal distribution, as specified below.
 
@@ -108,11 +128,59 @@ Since each bimodal distribution is a mixture of two Gaussian distributions, thes
 
 Since this is a mixture Gaussian case, we should expect LCA to perform very well since it assumes mixture Gaussian data. K-mean should also perform well, since k-means is proven to identify cluster in normal data well.
 
-## Multimodal Data - Results
+### Results
 
 We found that the median Rand index for 100 runs using k-means with sample size $n=500$ was 0.99 (IQR: 0.17) while for LCA it was 1 (IQR: 0). For sample size was $n=1000$ the median Rand index for k-means was 0.99 (IQR: 0.25) and for LCA it was 1 (IQR: 0). For sample size $n=5000$ the median Rand index for k-means was 1 (IQR: 0) and it was the same for LCA. These results are visualized below and show that k-means and LCA both perform almost perfectly in this case, with LCA performing better when the sample size is smaller. Variation from a Rand index of 1 (i.e., perfect classification) comes in only when k-means or LCA algorithms do not choose the correct number of clusters initially.
 
 ![Mutlimodal Data - Results](report_image/multimodal_results.png)
+
+## Heavy Tails Data
+
+### Data Generation
+
+To investigate the algorithm performance in the heavy tails data setting, we consider generating data from a mixture of the Cauchy distribution with two latent clusters. Specifically, we sample $X_{1i}, i = 1...N$ from a mixture of Cauchy distribution $\lambda_1f_1 + \lambda_2f_2$ where $f_1 \sim \text{Cauchy}(-3,3), f_2 \sim \text{Cauchy}(3,0.5)$ and we set the mixing weights
+$\lambda_1 = \lambda_2 = 0.5$ corresponding to the latent cluster $1,2$. We further sample $X_{2i}$ from an independent Gaussian distribution $\text{N}(0,1)$.
+
+We first examine the generated data via scatter plot and the density plot where the two colors denote two latent clusters. By a direct observation of these plots, we notice the two latent clusters are not easily separated. 
+
+```{r, fig.cap="Scatter and density plot for the mixture of Cauchy distribution",out.width = "49%",fig.show='hold',fig.align='center'}
+knitr::include_graphics(c("report_image/cauchy.png", "report_image/cauchy_2.png"))
+```
+
+### Results
+
+We examine the model performance of K means and LCA via 100 runs of simulation with sample sizes $N = 500, 1000, 5000$ using Rand index. We observe that in all our simulation settings, LCA performed better than K means in terms of Rand index. As sample size increases, LCA performed worse. 
+
+```{r, fig.cap="Boxplot of Rand Index for the mixture of Cauchy distribution ",out.width = "50%"}
+knitr::include_graphics("report_image/RI_cauchy.png")
+```
+
+
+## Prsence of Outliers
+
+### Data Generation 
+
+Finally, we investigate the scenario where there exits outliers in the data. We first generate $X_{1i}, i = 1,...,N$ from a mixture of Gaussian distribution  $\lambda_1f_1 + \lambda_2f_2$ where $f_1 \sim \text{N}(0,1), f_2 \sim \text{N}(3,1)$ and we set the mixing weights
+$\lambda_1 = \lambda_2 = 0.5$ corresponding to the latent cluster $1,2$. We further sample $X_{2i}$ from an independent Gaussian distribution $\text{N}(0,1)$.
+We then generate outliers $\epsilon$ from $\text{N}(30,1), \text{N}(-30,1)$ and $\epsilon's$ are added to $X_1$ with equal probabilities of $0.05$ generated from $\text{bernouli}(0.05)$. 
+
+Similarly, we examine examine the generated data via scatter plot and the density plot where the two colors denote two latent clusters. 
+
+```{r, fig.cap="Scatter and density plot for data with Gaussian outlier",out.width = "49%",fig.show='hold',fig.align='center'}
+knitr::include_graphics(c("report_image/outlier.png", "report_image/outlier2.png"))
+```
+
+
+
+### Results 
+
+Similarly, performance of K means and LCA via is examinined 100 runs of simulation with sample sizes $N = 500, 1000, 5000$ using Rand index. We observe that in all our simulation settings, LCA performed better than K means in terms of Rand index.
+
+```{r, fig.cap="Boxplot of Rand Index for data with Gaussian outlier ",out.width = "50%"}
+knitr::include_graphics("report_image/RI_outlier.png")
+```
+
+
 
 # Discussion
 
